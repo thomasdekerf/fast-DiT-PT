@@ -159,6 +159,8 @@ def main(args):
         drop_last=True
     )
 
+    NUM_SAMPLES = len(sampler)
+
     train_steps = 0
     for x, y in loader:
         x = x.to(device)
@@ -168,13 +170,14 @@ def main(args):
             x = vae.encode(x).latent_dist.sample().mul_(0.18215)
             
         x = x.detach().cpu().numpy()    # (1, 4, 32, 32)
-        np.save(f'{args.features_path}/imagenet256_features/{train_steps}.npy', x)
+        save_num = NUM_SAMPLES * rank + train_steps
+        np.save(f'{args.features_path}/imagenet256_features/{save_num}.npy', x)
 
         y = y.detach().cpu().numpy()    # (1,)
-        np.save(f'{args.features_path}/imagenet256_labels/{train_steps}.npy', y)
+        np.save(f'{args.features_path}/imagenet256_labels/{save_num}.npy', y)
             
         train_steps += 1
-        print(train_steps)
+        print(save_num)
 
 if __name__ == "__main__":
     # Default args here will train DiT-XL/2 with the hyperparameters we used in our paper (except training iters).
