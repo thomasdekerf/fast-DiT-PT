@@ -62,10 +62,10 @@ python sample.py --model DiT-L/4 --image-size 256 --ckpt /path/to/model.pt
 
 ## Training
 ### Preparation Before Training
-To extract ImageNet features with `1` GPUs on one node:
+To extract ImageNet features with `N` GPUs on one node:
 
 ```bash
-torchrun --nnodes=1 --nproc_per_node=1 extract_features.py --model DiT-XL/2 --data-path /path/to/imagenet/train --features-path /path/to/store/features
+torchrun --nnodes=1 --nproc_per_node=N extract_features.py --model DiT-XL/2 --data-path /path/to/imagenet/train --features-path /path/to/store/features --global-batch-size=256
 ```
 
 ### Training DiT

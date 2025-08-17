@@ -26,6 +26,7 @@ from time import time
 import argparse
 import logging
 import os
+from tqdm import tqdm
 
 from models import DiT_models
 from diffusion import create_diffusion
@@ -135,6 +136,7 @@ def main(args):
     vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
 
     # Setup data:
+    local_batch_size = args.global_batch_size // dist.get_world_size()
     transform = transforms.Compose([
         transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
         transforms.RandomHorizontalFlip(),
@@ -151,33 +153,36 @@ def main(args):
     )
     loader = DataLoader(
         dataset,
-        batch_size = 1,
+        batch_size = local_batch_size,
         shuffle=False,
         sampler=sampler,
         num_workers=args.num_workers,
         pin_memory=True,
-        drop_last=True
+        drop_last=False
     )
 
     NUM_SAMPLES = len(sampler)
 
     train_steps = 0
-    for x, y in loader:
+    for x, y in tqdm(loader, total=len(loader), desc=f"Rank {rank}"):
         x = x.to(device)
         y = y.to(device)
         with torch.no_grad():
             # Map input images to latent space + normalize latents:
             x = vae.encode(x).latent_dist.sample().mul_(0.18215)
             
-        x = x.detach().cpu().numpy()    # (1, 4, 32, 32)
-        save_num = NUM_SAMPLES * rank + train_steps
-        np.save(f'{args.features_path}/imagenet256_features/{save_num}.npy', x)
-
-        y = y.detach().cpu().numpy()    # (1,)
-        np.save(f'{args.features_path}/imagenet256_labels/{save_num}.npy', y)
+        x = x.detach().cpu().numpy()    # (bs, 4, 32, 32)
+        y = y.detach().cpu().numpy()    # (bs,)
+        for i in range(x.shape[0]):
+            # save_num = NUM_SAMPLES * rank + train_steps * local_batch_size + i
+            save_num = train_steps * args.global_batch_size + dist.get_world_size() * i + rank
+            np.save(f'{args.features_path}/imagenet256_features/{save_num}.npy', np.expand_dims(x[i], axis=0))
+            np.save(f'{args.features_path}/imagenet256_labels/{save_num}.npy', np.expand_dims(y[i], axis=0))
             
         train_steps += 1
-        print(save_num)
+        # print(save_num)
+
+    cleanup()
 
 if __name__ == "__main__":
     # Default args here will train DiT-XL/2 with the hyperparameters we used in our paper (except training iters).
