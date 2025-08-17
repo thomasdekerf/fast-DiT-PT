@@ -133,7 +133,7 @@ def main(args):
     # Create model:
     assert args.image_size % 8 == 0, "Image size must be divisible by 8 (for the VAE encoder)."
     latent_size = args.image_size // 8
-    vae = AutoencoderKL.from_pretrained(/aiarena/gpfs/fast-DiT-lavinal712/extract_features.py).to(device)
+    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
 
     # Setup data:
     local_batch_size = args.global_batch_size // dist.get_world_size()
