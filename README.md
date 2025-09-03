@@ -27,6 +27,7 @@ to run pre-trained models locally on CPU, you can remove the `cudatoolkit` and `
 
 ```bash
 conda env create -f environment.yml
+
 conda activate DiT
 ```
 

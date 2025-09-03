@@ -4,12 +4,12 @@ vae: sd_vae
 train_steps: 300000
 optimizer: adamw
 lr: 2.0e-4
-batch_size: 64
+batch_size: 1
 time_on: both
 direction_token: true
 lambda_deltaE: 0.05
 lambda_ssim: 0.05
-paired_root: data/paired_af_he/
+paired_root: /home/thomas/Desktop/DATA/MIST/ER/ER/TrainValAB
 vae_cache_dir: cache/latents_af_he/
 sampler: dpm_solver
 sample_steps: 20
