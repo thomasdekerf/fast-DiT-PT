@@ -78,6 +78,21 @@ To launch DiT-XL/2 (256x256) training with `1` GPUs on one node:
 accelerate launch --mixed_precision fp16 train.py --model DiT-XL/2 --feature-path /path/to/store/features
 ```
 
+## Paired Image-to-Image with DiT-PT
+
+This fork adds a simple two-stream token conditioning setup for paired image translation. Prepare your paired dataset and then run:
+
+```bash
+python train.py --task i2i_dit_pt --model DiT-XL/2 \
+  --paired_root data/paired_af_he --image-size 256 --train_steps 1000
+```
+
+To sample from a trained checkpoint:
+
+```bash
+python scripts/sample_i2i.py --ckpt path/to/ckpt.pt --src path/to/src.png --image-size 256
+```
+
 To launch DiT-XL/2 (256x256) training with `N` GPUs on one node:
 ```bash
 accelerate launch --multi_gpu --num_processes N --mixed_precision fp16 train.py --model DiT-XL/2 --feature-path /path/to/store/features

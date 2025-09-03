@@ -229,6 +229,36 @@ class DiT(nn.Module):
         x = torch.einsum('nhwpqc->nchpwq', x)
         imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
         return imgs
+
+    # ------------------------------------------------------------------
+    # Utilities for token-level access used by DiT-PT wrapper
+    # ------------------------------------------------------------------
+    def patchify(self, x):
+        """Apply patch embedding and add positional encodings."""
+        return self.x_embedder(x) + self.pos_embed
+
+    def forward_tokens(self, tokens, t):
+        """Forward a sequence of already patchified tokens through DiT.
+
+        Args:
+            tokens: token sequence [B, T, D]
+            t: timesteps [B]
+        Returns:
+            Per-token predictions before unpatchifying.
+        """
+        t_emb = self.t_embedder(t)
+        c = t_emb
+        x = tokens
+        for block in self.blocks:
+            x = block(x, c)
+        x = self.final_layer(x, c)
+        return x
+
+    def unpatchify_eps(self, tokens, latent_shape):
+        """Convert per-token outputs back to epsilon map."""
+        imgs = self.unpatchify(tokens)
+        # Only keep epsilon channels
+        return imgs[:, :self.in_channels, :, :]
     
     def ckpt_wrapper(self, module):
         def ckpt_forward(*inputs):
