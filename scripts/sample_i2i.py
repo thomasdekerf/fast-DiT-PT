@@ -42,7 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--ckpt', type=str, required=True)
     parser.add_argument('--src', type=str, required=True)
     parser.add_argument('--out', type=str, default='out.png')
-    parser.add_argument('--model', type=str, default='DiT-XL/2')
+    parser.add_argument('--model', type=str, default='DiT-S/8')
     parser.add_argument('--image-size', type=int, default=256)
     parser.add_argument('--vae', type=str, choices=['ema', 'sd_vae', 'mse'], default='sd_vae')
     parser.add_argument('--steps', type=int, default=20)
