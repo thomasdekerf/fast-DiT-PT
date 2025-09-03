@@ -271,9 +271,23 @@ def main_i2i_dit_pt(args):
     loader = DataLoader(dataset, batch_size=args.global_batch_size, shuffle=True,
                         num_workers=args.num_workers, drop_last=True)
 
+    # Create directory for saving checkpoints
+    os.makedirs(args.results_dir, exist_ok=True)
+    ckpt_dir = os.path.join(args.results_dir, "checkpoints")
+    os.makedirs(ckpt_dir, exist_ok=True)
+
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     model.train()
-    for step, batch in enumerate(loader):
+
+    loader_iter = iter(loader)
+    step = 0
+    while step < args.train_steps:
+        try:
+            batch = next(loader_iter)
+        except StopIteration:
+            loader_iter = iter(loader)
+            batch = next(loader_iter)
+
         src_img = batch['src_img'].to(device)
         tgt_img = batch['tgt_img'].to(device)
         ids = batch['id']
@@ -304,10 +318,18 @@ def main_i2i_dit_pt(args):
 
         if step % args.log_every == 0:
             print(f"step {step} loss {loss.item():.4f}")
-        if step >= args.train_steps:
-            break
 
-    print('Training finished')
+        if (step + 1) % args.ckpt_every == 0:
+            ckpt_path = os.path.join(ckpt_dir, f"{step + 1:07d}.pt")
+            torch.save({"model": model.state_dict(), "optimizer": opt.state_dict(), "step": step + 1}, ckpt_path)
+            print(f"Saved checkpoint to {ckpt_path}")
+
+        step += 1
+
+    # Save final model
+    final_ckpt = os.path.join(ckpt_dir, "final.pt")
+    torch.save({"model": model.state_dict(), "optimizer": opt.state_dict(), "step": step}, final_ckpt)
+    print(f"Training finished, final model saved to {final_ckpt}")
 
 
 if __name__ == "__main__":
