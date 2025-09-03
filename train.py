@@ -29,8 +29,12 @@ import os
 from accelerate import Accelerator
 
 from models import DiT_models
+from models.dit_pt import DiTPT
 from diffusion import create_diffusion
 from diffusers.models import AutoencoderKL
+from datasets.paired_i2i import PairedI2I
+from losses.color import deltaE2000
+from losses.structure import ssim
 
 
 #################################################################################
@@ -248,6 +252,64 @@ def main(args):
         logger.info("Done!")
 
 
+#################################################################################
+#                          I2I DiT-PT Training Loop                             #
+#################################################################################
+
+def main_i2i_dit_pt(args):
+    """Training loop for paired image-to-image translation using DiT-PT."""
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    latent_size = args.image_size // 8
+    base = DiT_models[args.model](input_size=latent_size, learn_sigma=False, num_classes=1)
+    model = DiTPT(base, hidden_size=base.x_embedder.proj.out_channels,
+                  use_direction_token=args.direction_token).to(device)
+    diffusion = create_diffusion(timestep_respacing="")
+    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
+
+    dataset = PairedI2I(args.paired_root, size=args.image_size, vae_cache_dir=args.vae_cache_dir)
+    loader = DataLoader(dataset, batch_size=args.global_batch_size, shuffle=True,
+                        num_workers=args.num_workers, drop_last=True)
+
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    model.train()
+    for step, batch in enumerate(loader):
+        src_img = batch['src_img'].to(device)
+        tgt_img = batch['tgt_img'].to(device)
+        ids = batch['id']
+        z_src_list, z_tgt_list = [], []
+        for i in range(src_img.size(0)):
+            z_s, z_t = dataset.encode_to_latents(vae, src_img[i], tgt_img[i], ids[i])
+            z_src_list.append(z_s)
+            z_tgt_list.append(z_t)
+        z_src = torch.stack(z_src_list).to(device)
+        z_tgt = torch.stack(z_tgt_list).to(device)
+
+        t = torch.randint(0, diffusion.num_timesteps, (src_img.size(0),), device=device)
+        noise = torch.randn_like(z_tgt)
+        z_tgt_noisy = diffusion.q_sample(z_tgt, t, noise)
+        direction_id = torch.zeros(src_img.size(0), dtype=torch.long, device=device) if args.direction_token else None
+        eps_pred = model(z_src, z_tgt_noisy, t, direction_id, time_on=args.time_on)
+        loss = torch.nn.functional.mse_loss(eps_pred, noise)
+        if args.lambda_deltaE > 0 or args.lambda_ssim > 0:
+            with torch.no_grad():
+                x_hat = vae.decode(z_tgt / 0.18215).sample
+            if args.lambda_deltaE > 0:
+                loss = loss + args.lambda_deltaE * deltaE2000(x_hat, tgt_img).mean()
+            if args.lambda_ssim > 0:
+                loss = loss + args.lambda_ssim * (1 - ssim(x_hat, tgt_img)).mean()
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+        if step % args.log_every == 0:
+            print(f"step {step} loss {loss.item():.4f}")
+        if step >= args.train_steps:
+            break
+
+    print('Training finished')
+
+
 if __name__ == "__main__":
     # Default args here will train DiT-XL/2 with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
@@ -259,9 +321,21 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=1400)
     parser.add_argument("--global-batch-size", type=int, default=256)
     parser.add_argument("--global-seed", type=int, default=0)
-    parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
+    parser.add_argument("--vae", type=str, choices=["ema", "mse", "sd_vae"], default="ema")
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=50_000)
+    parser.add_argument("--task", type=str, default="t2i")
+    parser.add_argument("--paired_root", type=str, default=None)
+    parser.add_argument("--direction_token", action='store_true')
+    parser.add_argument("--time_on", type=str, choices=['tgt', 'both'], default='both')
+    parser.add_argument("--lambda_deltaE", type=float, default=0.0)
+    parser.add_argument("--lambda_ssim", type=float, default=0.0)
+    parser.add_argument("--vae_cache_dir", type=str, default=None)
+    parser.add_argument("--train_steps", type=int, default=1000)
+    parser.add_argument("--lr", type=float, default=2e-4)
     args = parser.parse_args()
-    main(args)
+    if args.task == 'i2i_dit_pt':
+        main_i2i_dit_pt(args)
+    else:
+        main(args)
