@@ -120,6 +120,15 @@ class CustomDataset(Dataset):
         return torch.from_numpy(features), torch.from_numpy(labels)
 
 
+def decode_latents_in_batches(vae, latents, batch_size=1):
+    """Decode latents in smaller batches to limit memory usage."""
+    x_hat_list = []
+    for i in range(0, latents.size(0), batch_size):
+        latents_slice = latents[i:i + batch_size]
+        x_hat_list.append(vae.decode(latents_slice / 0.18215).sample)
+    return torch.cat(x_hat_list, dim=0)
+
+
 #################################################################################
 #                                  Training Loop                                #
 #################################################################################
@@ -307,7 +316,7 @@ def main_i2i_dit_pt(args):
         loss = torch.nn.functional.mse_loss(eps_pred, noise)
         if args.lambda_deltaE > 0 or args.lambda_ssim > 0:
             with torch.no_grad():
-                x_hat = vae.decode(z_tgt / 0.18215).sample
+                x_hat = decode_latents_in_batches(vae, z_tgt, args.vae_decode_batch_size)
             if args.lambda_deltaE > 0:
                 loss = loss + args.lambda_deltaE * deltaE2000(x_hat, tgt_img).mean()
             if args.lambda_ssim > 0:
@@ -354,6 +363,7 @@ if __name__ == "__main__":
     parser.add_argument("--lambda_deltaE", type=float, default=0.0)
     parser.add_argument("--lambda_ssim", type=float, default=0.0)
     parser.add_argument("--vae_cache_dir", type=str, default=None)
+    parser.add_argument("--vae-decode-batch-size", type=int, default=1)
     parser.add_argument("--train_steps", type=int, default=1000)
     parser.add_argument("--lr", type=float, default=2e-4)
     args = parser.parse_args()
