@@ -1,0 +1,17 @@
+feature_path: features
+results_dir: lightning_logs
+model: DiT-S/8
+image_size: 256
+num_classes: 1000
+batch_size: 32
+max_epochs: 1
+num_workers: 4
+vae: ema
+learning_type: diffusion-transformer
+optimizer:
+  lr: 1.0e-4
+scheduler:
+  name: cosine
+  T_max: 1000
+  eta_min: 1.0e-6
+

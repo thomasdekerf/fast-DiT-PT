@@ -79,6 +79,17 @@ To launch DiT-XL/2 (256x256) training with `1` GPUs on one node:
 accelerate launch --mixed_precision fp16 train.py --model DiT-XL/2 --feature-path /path/to/store/features
 ```
 
+### Lightning Training
+
+For richer logging and easier experiment management, a PyTorch Lightning
+training entry point is available in [`train_lightning.py`](train_lightning.py).
+It uses a YAML config to control hyperparameters and learning rate
+scheduling and logs metrics such as loss and learning rate to TensorBoard.
+
+```bash
+python train_lightning.py --config configs/lightning.yaml
+```
+
 ## Paired Image-to-Image with DiT-PT
 
 This fork adds a simple two-stream token conditioning setup for paired image translation. Prepare your paired dataset and then run:
