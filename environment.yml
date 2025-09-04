@@ -12,3 +12,5 @@ dependencies:
     - diffusers
     - accelerate
     - tqdm
+    - pytorch-lightning
+    - tensorboard
